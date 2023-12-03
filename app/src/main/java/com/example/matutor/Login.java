@@ -1,43 +1,33 @@
 package com.example.matutor;
 
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.content.DialogInterface;
+import android.content.Intent;
+import android.os.Build;
+import android.os.Bundle;
+import android.util.Log;
+import android.view.View;
+import android.view.WindowManager;
+
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
-
-import android.content.DialogInterface;
-import android.content.Intent;
-import android.os.Bundle;
-import android.util.Patterns;
-import android.view.View;
-import android.view.WindowManager;
-import android.widget.Toast;
+import androidx.core.app.NotificationCompat;
+import androidx.core.app.NotificationManagerCompat;
 
 import com.example.matutor.databinding.ActivityLoginBinding;
 import com.google.android.gms.tasks.OnCompleteListener;
-import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
 import com.google.firebase.auth.AuthResult;
 import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.auth.FirebaseUser;
-import com.google.firebase.firestore.FirebaseFirestore;
-import com.google.firebase.firestore.QuerySnapshot;
+import com.google.firebase.messaging.FirebaseMessaging;
+import com.google.firebase.messaging.RemoteMessage;
 
 public class Login extends AppCompatActivity {
 
     ActivityLoginBinding binding;
     FirebaseAuth auth = FirebaseAuth.getInstance();
-    FirebaseFirestore firestore = FirebaseFirestore.getInstance();
-    @Override
-    public void onStart() {
-        super.onStart();
-        // Check if user is signed in (non-null) and update UI accordingly.
-        FirebaseUser currentUser = auth.getCurrentUser();
-        if (currentUser != null) {
-            Intent intent = new Intent(getApplicationContext(), Dashboard.class);
-            startActivity(intent);
-            finish();
-        }
-    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -48,58 +38,24 @@ public class Login extends AppCompatActivity {
 
         auth = FirebaseAuth.getInstance();
 
+        // Create the notification channel (you can move this to a separate method if needed)
+        createNotificationChannel();
+
         binding.loginButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                String email = binding.emailInput.getText().toString().trim();
-                String password = binding.passwordInput.getText().toString().trim();
+                // Perform login logic
 
-                if (!email.isEmpty() && Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
-                    if (!password.isEmpty()) {
-                        firestore.collection("user_learner")
-                                .whereEqualTo("learnerEmail", email)
-                                .get()
-                                .addOnSuccessListener(new OnSuccessListener<QuerySnapshot>() {
-                                    @Override
-                                    public void onSuccess(QuerySnapshot queryDocumentSnapshots) {
-                                        if (!queryDocumentSnapshots.isEmpty()) {
-                                            auth.signInWithEmailAndPassword(email, password)
-                                                    .addOnCompleteListener(Login.this, new OnCompleteListener<AuthResult>() {
-                                                        @Override
-                                                        public void onComplete(@NonNull Task<AuthResult> authTask) {
-                                                            if (authTask.isSuccessful()) {
-                                                                Toast.makeText(getApplicationContext(), "Login Successful!", Toast.LENGTH_SHORT).show();
-                                                                Intent intent = new Intent(getApplicationContext(), Dashboard.class);
-                                                                startActivity(intent);
-                                                                finish();
-                                                            } else {
-                                                                Toast.makeText(getApplicationContext(), "Login Failed!", Toast.LENGTH_SHORT).show();
-                                                            }
-                                                        }
-                                                    });
-                                        } else {
-                                            Toast.makeText(getApplicationContext(), "User not found!", Toast.LENGTH_SHORT).show();
-                                        }
-                                    }
-                                })
-                                .addOnFailureListener(e -> {
-                                    Toast.makeText(getApplicationContext(), "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                                });
-                    } else {
-                        binding.passwordInput.setError("Please enter your password");
-                    }
-                } else if (email.isEmpty()) {
-                    binding.emailInput.setError("Please enter your email address.");
-                } else {
-                    binding.emailInput.setError("Please enter a valid email address.");
-                }
+                // After a successful login, request FCM token
+                requestFCMToken();
 
+                Intent intent = new Intent(getApplicationContext(), Dashboard.class);
+                startActivity(intent);
             }
-
         });
 
-        //register here button
         binding.regHereButton.setOnClickListener(new View.OnClickListener() {
+            @Override
             public void onClick(View view) {
                 Intent intent = new Intent(getApplicationContext(), RegisterEmailPass.class);
                 startActivity(intent);
@@ -107,12 +63,39 @@ public class Login extends AppCompatActivity {
                 finish();
             }
         });
-
     }
 
-    //Exit Message Prompt Validation
+    private void createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            String channelId = "channelId";
+            CharSequence channelName = "Channel Name";
+            int importance = NotificationManager.IMPORTANCE_DEFAULT;
+
+            NotificationChannel channel = new NotificationChannel(channelId, channelName, importance);
+            NotificationManager notificationManager = getSystemService(NotificationManager.class);
+            notificationManager.createNotificationChannel(channel);
+        }
+    }
+
+    private void requestFCMToken() {
+        FirebaseMessaging.getInstance().getToken()
+                .addOnCompleteListener(task -> {
+                    if (!task.isSuccessful()) {
+                        // Handle token retrieval failure
+                        return;
+                    }
+
+                    // Get new FCM registration token
+                    String token = task.getResult();
+
+                    // Log and handle the token as needed
+                    Log.d("FCMNotifs", "FCM Token: " + token);
+                });
+    }
+
     @Override
     public void onBackPressed() {
+        // Exit Message Prompt Validation
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("Exit");
         builder.setMessage("Exit application?");
@@ -131,5 +114,4 @@ public class Login extends AppCompatActivity {
         });
         builder.show();
     }
-
 }
